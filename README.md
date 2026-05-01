@@ -1,4 +1,4 @@
-# 🎉 ClaasPlus – Personalized Greetings & Wishes App
+# 🎉 GreetMaster – Personalized Greetings & Wishes App
 
 > A beautifully designed full-stack web application that lets you create personalized greeting cards with your photo and name, then share them instantly. Now upgraded with a premium experience!
 
