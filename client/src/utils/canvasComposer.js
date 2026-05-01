@@ -222,3 +222,85 @@ export const composeCard = async (canvas, template, user) => {
   drawDecorations(ctx, template);
   await drawUserOverlay(ctx, template, user);
 };
+
+// ── Dynamic Video Export ───────────────────────────
+const drawDynamicPattern = (ctx, template, frame) => {
+  ctx.save();
+  ctx.fillStyle = template.accentColor || '#fff';
+  // Use math to pseudo-randomly place 60 stars that move and twinkle based on the frame count
+  for (let i = 0; i < 60; i++) {
+    // calculate deterministic but scattered positions
+    const startX = Math.abs(Math.sin(i * 123.45)) * W;
+    const startY = Math.abs(Math.cos(i * 321.12)) * H;
+    
+    // add movement based on frame
+    const speedX = (i % 3) - 1; // -1, 0, 1
+    const speedY = ((i % 5) + 1) * 0.5; // moving down
+    
+    let x = (startX + speedX * frame) % W;
+    let y = (startY + speedY * frame) % H;
+    if (x < 0) x += W;
+    
+    // twinkle effect
+    const scale = 0.5 + 0.5 * Math.sin(frame * 0.1 + i);
+    
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(scale, scale);
+    ctx.globalAlpha = 0.1 + (0.6 * scale);
+    drawStar(ctx, 0, 0, 8, 4, 5);
+    ctx.fill();
+    ctx.restore();
+  }
+  ctx.restore();
+};
+
+export const composeVideoCard = async (canvas, template, user) => {
+  return new Promise(async (resolve, reject) => {
+    try {
+      // 1. Render the static parts to an offscreen canvas
+      const baseCanvas = document.createElement('canvas');
+      baseCanvas.width = W; baseCanvas.height = H;
+      const baseCtx = baseCanvas.getContext('2d');
+      await drawBg(baseCtx, template);
+      // We skip the static pattern here so we can draw it dynamically
+      drawDecorations(baseCtx, template);
+      await drawUserOverlay(baseCtx, template, user);
+
+      // 2. Setup main canvas for recording
+      canvas.width = W; canvas.height = H;
+      const ctx = canvas.getContext('2d');
+      
+      const stream = canvas.captureStream(30); // 30 FPS
+      const recorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
+      const chunks = [];
+      
+      recorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+      recorder.onstop = () => resolve(new Blob(chunks, { type: 'video/webm' }));
+      
+      recorder.start();
+
+      let frame = 0;
+      const totalFrames = 30 * 4; // 4 seconds total
+      
+      const loop = () => {
+        // Draw the static background and overlays
+        ctx.drawImage(baseCanvas, 0, 0);
+        
+        // Draw the moving animated pattern on top
+        drawDynamicPattern(ctx, template, frame);
+        
+        frame++;
+        if (frame < totalFrames) {
+          requestAnimationFrame(loop);
+        } else {
+          recorder.stop();
+        }
+      };
+      
+      loop();
+    } catch (err) {
+      reject(err);
+    }
+  });
+};

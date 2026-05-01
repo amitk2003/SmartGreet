@@ -113,6 +113,7 @@ npm run dev
 
 ## 🚀 Future Improvements
 
+- [ ] **Animated Video Export**: Convert premium CSS animations into Canvas animations and use the `MediaRecorder` API to export cards as `.mp4` or `.webm` short videos.
 - [ ] Complete Firebase Auth integration (Google Login).
 - [ ] Implement cloud storage (AWS S3 or Cloudinary) for permanent user photo storage.
 - [ ] Advanced image editing (drag, drop, scale photos on the canvas).

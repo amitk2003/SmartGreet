@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { templateAPI, userAPI } from '../api';
-import { composeCard } from '../utils/canvasComposer';
+import { composeCard, composeVideoCard } from '../utils/canvasComposer';
 import { downloadCanvas, fileToBase64, cropImageToCircle, getAvatarEmoji } from '../utils/imageUtils';
 import toast from 'react-hot-toast';
 import styles from './HomePage.module.css';
@@ -119,36 +119,78 @@ export default function HomePage() {
   const handleShare = async (platform) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    switch (platform) {
-      case 'whatsapp':
-        downloadCanvas(canvas, 'greeting.png');
-        setTimeout(() => window.open(`https://wa.me/?text=${encodeURIComponent('Check this greeting! ')}`, '_blank'), 500);
-        toast.success('📱 Image saved! Open WhatsApp to share.', { duration: 4000 });
-        break;
-      case 'email':
-        downloadCanvas(canvas, 'greeting.png');
-        window.location.href = `mailto:?subject=A greeting for you!&body=Check out this card I made with ClaasPlus!`;
-        break;
-      case 'copy':
-        canvas.toBlob(async (blob) => {
+
+    const getBlob = () => new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+
+    try {
+      switch (platform) {
+        case 'whatsapp': {
           try {
-            await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
-            toast.success('✅ Copied to clipboard!');
-          } catch { downloadCanvas(canvas, 'greeting.png'); toast.success('⬇️ Downloaded!'); }
-        });
-        break;
-      case 'native':
-        if (navigator.share) {
-          canvas.toBlob(async (blob) => {
+            const blob = await getBlob();
             const file = new File([blob], 'greeting.png', { type: 'image/png' });
-            try { await navigator.share({ files: [file], title: 'A greeting for you!' }); }
-            catch (e) { if (e.name !== 'AbortError') downloadCanvas(canvas, 'greeting.png'); }
-          });
-        } else { downloadCanvas(canvas, 'greeting.png'); toast.success('⬇️ Downloaded!'); }
-        break;
-      default:
-        downloadCanvas(canvas, 'greeting.png');
-        toast.success('⬇️ Card downloaded!');
+            
+            // On mobile devices, this will open the native share menu where they can pick WhatsApp and it auto-attaches
+            if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+              try {
+                await navigator.share({ files: [file], title: 'A greeting for you!', text: 'Check out this greeting card!' });
+                return; // Stop here if native share succeeded
+              } catch (err) {
+                if (err.name === 'AbortError') return; // User cancelled share sheet
+              }
+            }
+
+            // Fallback for Desktop (Windows/Mac) where direct image attachment via URL isn't allowed by WhatsApp
+            await navigator.clipboard.write([new window.ClipboardItem({ 'image/png': blob })]);
+            toast.success('📱 Desktop: Image copied! Opening WhatsApp... please Paste it (Ctrl+V)!', { duration: 5000 });
+            setTimeout(() => window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent('Check out this greeting card I made on ClaasPlus! (Paste the image here)')}`, '_blank'), 1500);
+          } catch (e) {
+            downloadCanvas(canvas, 'greeting.png');
+            toast.success('📱 Image downloaded! Open WhatsApp to attach it.', { duration: 4000 });
+          }
+          break;
+        }
+        case 'email':
+          downloadCanvas(canvas, 'greeting.png');
+          window.location.href = `mailto:?subject=A greeting for you!&body=Check out this card I made with ClaasPlus!`;
+          break;
+        case 'copy': {
+          try {
+            const blob = await getBlob();
+            await navigator.clipboard.write([new window.ClipboardItem({ 'image/png': blob })]);
+            toast.success('✅ Image copied to clipboard! You can now paste it.');
+          } catch (err) {
+            console.error('Clipboard error:', err);
+            downloadCanvas(canvas, 'greeting.png');
+            toast.success('⬇️ Could not copy, downloaded instead!');
+          }
+          break;
+        }
+        case 'native': {
+          const blob = await getBlob();
+          const file = new File([blob], 'greeting.png', { type: 'image/png' });
+          if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+            try {
+              await navigator.share({ files: [file], title: 'A greeting for you!' });
+            } catch (e) {
+              if (e.name !== 'AbortError') {
+                downloadCanvas(canvas, 'greeting.png');
+                toast.success('⬇️ Downloaded!');
+              }
+            }
+          } else {
+            downloadCanvas(canvas, 'greeting.png');
+            toast.success('⬇️ Downloaded! (Native share not supported here)');
+          }
+          break;
+        }
+        default:
+          downloadCanvas(canvas, 'greeting.png');
+          toast.success('⬇️ Card downloaded!');
+      }
+    } catch (globalErr) {
+      console.error(globalErr);
+      downloadCanvas(canvas, 'greeting.png');
+      toast.success('⬇️ Card downloaded!');
     }
   };
 
@@ -220,6 +262,33 @@ export default function HomePage() {
       downloadCanvas(tempCanvas, `claasplus-HD-${selectedTemplate.id}.png`);
     } else {
       downloadCanvas(canvasRef.current, `claasplus-${selectedTemplate.id}.png`);
+    }
+  };
+
+  const handleDownloadVideo = async () => {
+    if (!user?.isPremium) return;
+    toast.success('🎬 Recording 4-second video... please wait!', { duration: 4000 });
+    setCanvasRendering(true);
+    
+    try {
+      const tempCanvas = document.createElement('canvas');
+      const videoBlob = await composeVideoCard(tempCanvas, { ...selectedTemplate, wish: customWish, fontFamily, textColor }, user);
+      
+      const url = URL.createObjectURL(videoBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `claasplus-animated-${selectedTemplate.id}.webm`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      toast.success('✅ Video saved successfully! You can share it on WhatsApp.', { duration: 5000 });
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to generate video.');
+    } finally {
+      setCanvasRendering(false);
     }
   };
 
@@ -442,9 +511,17 @@ export default function HomePage() {
               ))}
             </div>
 
-            <button className={styles.downloadBtn} onClick={handleDownload}>
-              ⬇️ Download {user?.isPremium ? 'HD Quality 💎' : 'Card'}
-            </button>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button className={styles.downloadBtn} onClick={handleDownload} style={{ flex: 1 }}>
+                ⬇️ Download {user?.isPremium ? 'HD Image 💎' : 'Card'}
+              </button>
+              
+              {user?.isPremium && (
+                <button className={styles.downloadBtn} onClick={handleDownloadVideo} style={{ flex: 1, background: 'linear-gradient(135deg, #ec4899, #8b5cf6)', border: 'none' }}>
+                  🎬 Download Video
+                </button>
+              )}
+            </div>
           </div>
         </div>
       )}

@@ -78,6 +78,7 @@ Instead of querying the DOM globally (`document.getElementById`), the HTML5 Canv
 
 ## 5. Future Improvements
 
+- **Animated Video Export (MediaRecorder API):** Currently, premium animations are CSS-based DOM overlays. A planned technical upgrade is to migrate these animations directly into the Canvas rendering loop (`requestAnimationFrame`) and capture a 3-5 second video using the browser's native `MediaRecorder` API. This will allow premium users to export and share dynamic, animated `.webm` or `.mp4` greetings directly to WhatsApp.
 - **Cloud Storage:** Transition from local filesystem uploads (Multer disk storage) to AWS S3 or Cloudinary for scalable image hosting.
 - **Webhooks:** Implement Stripe webhooks to automatically handle subscription renewals and cancellations asynchronously.
 - **Optimization:** Implement lazy loading for the template grid images to improve Initial Page Load performance.
