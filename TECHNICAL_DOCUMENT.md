@@ -5,57 +5,56 @@
 
 ## 1. Problem-Solving Approach: How Image Overlay Logic Was Implemented
 
-The core challenge of the application was allowing users to seamlessly inject their profile photo and name into custom greeting card templates. To achieve this without relying on heavy third-party image manipulation libraries, the solution was built using the native **HTML5 `<canvas>` 2D API**.
+The main goal was to let users put their photo and name onto greeting card templates. Instead of using heavy external libraries, I built this using the standard **HTML5 `<canvas>` API**.
 
-The image overlay logic works by treating the canvas like a layered composition (similar to Photoshop):
-1. **Background Layer (`drawBg`):** Draws the base template gradient or fetches and draws an external background image URL.
-2. **Decoration Layer (`drawDecorations`):** Renders static template elements such as emojis and the title.
-3. **Text Formatting:** Since the native Canvas API does not support text-wrapping, a custom mathematical `wrapText` function splits the user's custom wish into words, measures their pixel width via `ctx.measureText()`, and calculates line breaks to keep the text within the card's boundaries.
-4. **User Profile Overlay (`drawUserOverlay`):** This is the crucial layer. It utilizes `ctx.clip()` to create a perfect mathematical circle. It then loads the user's uploaded profile picture (converted to base64) and draws it exactly within that clipped region, ensuring a modern, circular avatar aesthetic, followed by the user's name string.
-5. **Advanced Video Export:** For premium animated templates, the static layers are drawn to an off-screen canvas. Then, an active `requestAnimationFrame` loop draws moving elements (like twinkling stars) over the static base. The browser's native `MediaRecorder` API captures this 30fps canvas stream and exports it as a playable `.webm` video.
+I broke the card down into simple layers:
+1. **Background:** First, I draw the template's background color or image onto the canvas.
+2. **Decorations:** Next, I draw the emoji and the card title.
+3. **Text Formatting:** Since the canvas API can't automatically wrap text, I wrote a custom function that splits the user's message into words and moves to a new line when the text gets too wide.
+4. **User Profile:** To make the user's photo a circle, I used `ctx.clip()` to draw a circle path, and then placed the uploaded photo inside it. Then I added their name below it.
+5. **Video Export:** For animated cards, I draw the base card once. Then, I use a JavaScript animation loop (`requestAnimationFrame`) to draw moving stars on top of it, and record the canvas for 4 seconds using the `MediaRecorder` API to save it as a video file.
 
 ---
 
 ## 2. Tech Stack
 
-The application has been engineered as a robust **MERN Stack** Web App, leveraging the following tools and frameworks:
+This project was built using the **MERN Stack** (MongoDB, Express, React, Node.js). 
 
 **Frontend (Client)**
-- **React 19 (via Vite):** Chosen for its component-based architecture and Vite's incredibly fast Hot Module Replacement (HMR) during development.
-- **React Router v7:** Enables seamless Single Page Application (SPA) navigation without page reloads.
-- **Axios:** Handles HTTP requests to the backend, utilizing interceptors to automatically attach authentication headers.
-- **React Hot Toast:** Provides elegant, accessible, and non-blocking UI notifications.
+- **React 19 & Vite:** Used to build the user interface and components. Vite makes development fast.
+- **React Router:** Handles navigating between pages like Home and Login.
+- **Axios:** Used for making API calls to the backend.
+- **React Hot Toast:** Shows simple popup messages (success/error) to the user.
 
 **Backend (Server)**
-- **Node.js & Express.js:** Provides a fast, non-blocking asynchronous backend to handle REST API requests and Stripe webhook events.
-- **MongoDB & Mongoose:** A NoSQL database providing flexible document schemas, ideal for storing varied template metadata and user profiles.
-- **JSON Web Tokens (JWT) & bcryptjs:** Handles secure password hashing and stateless, secure user authentication.
-- **Multer:** Middleware dedicated to parsing `multipart/form-data`, enabling the processing and storage of user profile photo uploads.
-- **Stripe API:** Integrates a secure, real-world payment gateway for users upgrading to the Premium tier.
+- **Node.js & Express.js:** The server that handles API requests and Stripe payments.
+- **MongoDB & Mongoose:** The database used to save user accounts and template data.
+- **JWT & bcryptjs:** Used for securely hashing passwords and keeping users logged in.
+- **Multer:** Handles file uploads so users can upload their profile pictures.
+- **Stripe:** Processes real payments for the premium subscription.
 
 ---
 
 ## 3. Challenges & Technical Hurdles
 
-**Hurdle 1: Synchronous Clipboard & WhatsApp Sharing Integration**
-- *Problem:* Web browsers require a strict, immediate "user gesture" (like a click) to allow writing to the system clipboard. However, rendering the Canvas to a Blob (`canvas.toBlob`) is an asynchronous operation. By the time the image was generated, the browser dropped the user gesture context, resulting in silent failures when users tried to copy the card to paste into WhatsApp Web.
-- *Solution:* The `canvas.toBlob` callback was wrapped in a JavaScript `Promise`. By using `await` directly inside the asynchronous click handler, the browser's execution thread preserved the gesture context, allowing the image to securely copy to the clipboard. For mobile users, the native Web Share API (`navigator.share`) was implemented to directly pass the image file to the WhatsApp app intent.
+**Hurdle 1: Copying Images to WhatsApp**
+- *Problem:* Browsers have strict security rules: you can only copy something to the clipboard exactly when a user clicks a button. Because generating the image on the canvas takes a split second (it's asynchronous), the browser would block the copy action, and pasting into WhatsApp wouldn't work.
+- *Solution:* I used Promises to properly wait for the image generation to finish *inside* the click event. For mobile phones, I used the native Web Share API so the image attaches to WhatsApp automatically.
 
-**Hurdle 2: React State Syncing with Canvas Rendering**
-- *Problem:* In React, state updates (like typing a custom wish or changing a color) trigger component re-renders. Constantly clearing and redrawing the heavy HTML5 Canvas on every keystroke caused noticeable UI lag.
-- *Solution:* Utilized React's `useRef` to maintain a persistent reference to the DOM canvas element without triggering re-renders. The heavy canvas drawing functions were placed inside optimized `useEffect` hooks with specific dependency arrays, ensuring the canvas only re-composed when absolute necessary.
+**Hurdle 2: React Lagging the Canvas**
+- *Problem:* Every time a user typed a letter in their custom message, React would re-render. If I cleared and redrew the entire canvas on every single keystroke, the app became very slow and laggy.
+- *Solution:* I used React's `useRef` to keep track of the canvas without forcing React to re-render it. I only redraw the canvas when specific things (like the final text or template) actually change.
 
-**Hurdle 3: Animating Canvas Overlays**
-- *Problem:* The premium template sparkles were originally CSS DOM overlays. When users downloaded the image, the Canvas API only captured the static image, losing the premium animations.
-- *Solution:* Engineered a dynamic rendering engine that captures a `canvas.captureStream()`. It mathematically animates the stars over a static off-screen background and records the stream using `MediaRecorder`, saving the final output as a video file.
+**Hurdle 3: Exporting Animations**
+- *Problem:* The premium sparkles were originally just CSS animations floating on top of the image. When a user downloaded the card, they only got the flat image underneath, and the animation was lost.
+- *Solution:* I moved the animation logic into the canvas itself. By using `MediaRecorder`, I recorded the canvas as it was drawing the moving stars and exported it as a `.webm` video file that users can share.
 
 ---
 
-## 4. Future Improvements & Scalability Considerations
+## 4. Future Improvements & Scalability
 
-As the ClaasPlus platform grows in user traffic and template volume, the following architectural upgrades will ensure high scalability:
+If this app gets a lot of users, here is how I would improve it:
 
-- **Cloud Object Storage & CDN:** Currently, user profile images are processed via Multer directly on the Node server. Moving asset storage to AWS S3 or Cloudinary, delivered via a CDN (like Cloudflare), will significantly reduce the Express server's bandwidth load and ensure images load instantly worldwide.
-- **Database Indexing & Cursor Pagination:** As the template database grows from dozens to thousands, queries will become slow. Implementing compound indexes in MongoDB (e.g., on `{ category: 1, isPremium: 1 }`) and migrating from array-loading to Cursor-Based Pagination will keep database lookups under 10ms and prevent the React frontend from rendering too many DOM nodes simultaneously.
-- **Background Worker Queues (BullMQ / Redis):** If the Canvas Video generation is ever moved from the client-side to the server-side (using FFmpeg) for higher quality outputs, it will block the Node.js event loop due to high CPU usage. Implementing a Redis-backed message queue will allow the API to accept the request immediately, offloading the heavy rendering to horizontally scalable worker nodes.
-- **Progressive Web App (PWA) Architecture:** Implementing Service Workers to aggressively cache the core application shell and popular template images. This will drastically improve First Contentful Paint (FCP) metrics and allow users on poor mobile connections to interact with the app reliably.
+- **Cloud Image Storage:** Right now, profile pictures are saved directly on the server. Moving them to a cloud service like AWS S3 or Cloudinary will save server space and load images faster for users.
+- **Database Improvements:** As we add thousands of templates, searching the database will get slower. I would add database indexes (like indexing by category) and add pagination (loading 20 templates at a time) so the page loads instantly.
+- **Background Jobs:** Generating video files takes a lot of processing power. In the future, I would move the video rendering to a separate background server (using tools like Redis or BullMQ) so it doesn't slow down the main website for other users.

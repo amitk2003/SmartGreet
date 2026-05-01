@@ -115,7 +115,6 @@ export default function HomePage() {
     finally { setSubscribing(false); }
   };
 
-  // Share card
   const handleShare = async (platform) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -129,17 +128,15 @@ export default function HomePage() {
             const blob = await getBlob();
             const file = new File([blob], 'greeting.png', { type: 'image/png' });
             
-            // On mobile devices, this will open the native share menu where they can pick WhatsApp and it auto-attaches
             if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
               try {
                 await navigator.share({ files: [file], title: 'A greeting for you!', text: 'Check out this greeting card!' });
-                return; // Stop here if native share succeeded
+                return;
               } catch (err) {
-                if (err.name === 'AbortError') return; // User cancelled share sheet
+                if (err.name === 'AbortError') return;
               }
             }
 
-            // Fallback for Desktop (Windows/Mac) where direct image attachment via URL isn't allowed by WhatsApp
             await navigator.clipboard.write([new window.ClipboardItem({ 'image/png': blob })]);
             toast.success('📱 Desktop: Image copied! Opening WhatsApp... please Paste it (Ctrl+V)!', { duration: 5000 });
             setTimeout(() => window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent('Check out this greeting card I made on ClaasPlus! (Paste the image here)')}`, '_blank'), 1500);
@@ -166,20 +163,24 @@ export default function HomePage() {
           break;
         }
         case 'native': {
-          const blob = await getBlob();
-          const file = new File([blob], 'greeting.png', { type: 'image/png' });
-          if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-            try {
+          try {
+            const blob = await getBlob();
+            const file = new File([blob], 'greeting.png', { type: 'image/png' });
+            if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
               await navigator.share({ files: [file], title: 'A greeting for you!' });
-            } catch (e) {
-              if (e.name !== 'AbortError') {
-                downloadCanvas(canvas, 'greeting.png');
-                toast.success('⬇️ Downloaded!');
-              }
+            } else if (navigator.share) {
+              await navigator.share({ title: 'A greeting for you!', text: 'Check out this greeting card!' });
+              downloadCanvas(canvas, 'greeting.png');
+              toast.success('⬇️ Image downloaded. You can attach it in the app!');
+            } else {
+              downloadCanvas(canvas, 'greeting.png');
+              toast.success('⬇️ Downloaded! (Native share not supported)');
             }
-          } else {
-            downloadCanvas(canvas, 'greeting.png');
-            toast.success('⬇️ Downloaded! (Native share not supported here)');
+          } catch (e) {
+            if (e.name !== 'AbortError') {
+              downloadCanvas(canvas, 'greeting.png');
+              toast.success('⬇️ Downloaded as fallback!');
+            }
           }
           break;
         }
@@ -188,9 +189,9 @@ export default function HomePage() {
           toast.success('⬇️ Card downloaded!');
       }
     } catch (globalErr) {
-      console.error(globalErr);
-      downloadCanvas(canvas, 'greeting.png');
-      toast.success('⬇️ Card downloaded!');
+      console.error('Global share error:', globalErr);
+      // Removed the global fallback download to avoid multiple downloads
+      toast.error('An error occurred while sharing.');
     }
   };
 
