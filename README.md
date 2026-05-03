@@ -8,7 +8,7 @@
 
 ## 📸 Overview
 
-ClaasPlus is a complete MERN-stack application (MongoDB, Express, React, Node.js) featuring user authentication, image uploads, template selection, and premium subscription handling via Stripe.
+SmartGreet is a complete MERN-stack application (MongoDB, Express, React, Node.js) featuring user authentication, image uploads, template selection, and premium subscription handling via Stripe.
 
 ---
 
@@ -127,4 +127,4 @@ MIT License – free to use, modify, and distribute.
 
 ---
 
-Made with ❤️ for the ClaasPlus Project
+Made by Amit kumar
